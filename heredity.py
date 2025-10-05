@@ -139,8 +139,99 @@ def joint_probability(people, one_gene, two_genes, have_trait):
         * everyone in set `have_trait` has the trait, and
         * everyone not in set` have_trait` does not have the trait.
     """
-    raise NotImplementedError
+    
+    joint_p = 1
 
+    for person, family in people.items():
+
+        mother = family["mother"]
+        father = family ["father"]
+        
+        gene = 2 if person in two_genes else 1 if person in one_gene else 0
+        trait = True if person in have_trait else False
+        
+        trait_prob = PROBS["trait"][gene][trait]
+        gene_prob = 0
+
+        if mother is None and father is None:
+            gene_prob = PROBS["gene"][gene]
+            
+        else:
+            mother_genes = 2 if mother in two_genes else 1 if mother in one_gene else 0
+            father_genes = 2 if father in two_genes else 1 if father in one_gene else 0
+
+            if gene == 0:
+                # Get no genes from both parents
+                gene_prob_mother = get_parent_gene_probability(False, mother, mother_genes)
+                gene_prob_father = get_parent_gene_probability(False, father, father_genes)
+
+                gene_prob = gene_prob_mother * gene_prob_father
+
+            elif gene == 1:
+                # Either they get the gene from their mother 
+                # and not their father, or they get the gene 
+                # from their father and not their mother.
+                gene_prob_mother = get_parent_gene_probability(True, mother, mother_genes) * get_parent_gene_probability(False, father, father_genes)
+                gene_prob_father = get_parent_gene_probability(False, mother, mother_genes) * get_parent_gene_probability(True, father, father_genes)
+
+                # These two scenarios are mutually exclusive (only one or the other can happen), so we add:
+                gene_prob = gene_prob_mother + gene_prob_father                
+
+            elif gene == 2:
+                # Get genes from both parents
+                gene_prob_mother = get_parent_gene_probability(True, mother, mother_genes)
+                gene_prob_father = get_parent_gene_probability(True, father, father_genes)
+
+                gene_prob = gene_prob_mother * gene_prob_father            
+        
+        joint_p *= gene_prob * trait_prob
+    
+    return joint_p
+
+
+def get_parent_gene_probability(child_has_gene, parent, parent_genes):
+    """
+    Returns the probability that a child inherits or does not inherit the gene from a parent.
+    """
+    if parent is not None:
+        if child_has_gene == True:
+            if parent_genes == 0:
+                return PROBS["mutation"]
+            elif parent_genes == 1:
+                # Can pass the gene or can pass by mutation
+                return 0.5 * (1 - PROBS["mutation"]) + 0.5 * PROBS["mutation"]
+            elif parent_genes == 2:
+                return 1 - PROBS["mutation"]
+        else:
+            if parent_genes == 0:
+                return 1 - PROBS["mutation"]
+            elif parent_genes == 1:
+                # Not pass the gene or not pass the gene by mutation
+                return 0.5 * (1 - PROBS["mutation"]) + 0.5 * PROBS["mutation"]
+            elif parent_genes == 2:
+                return PROBS["mutation"]
+    else:
+        return get_unknown_parent_gene_probability(child_has_gene)         
+
+
+def get_unknown_parent_gene_probability(child_has_gene):
+    """
+    Returns the probability that the child received genes from unknown parent
+    """
+    if child_has_gene == True:
+        gene_prob = PROBS["gene"][0] * PROBS["mutation"]
+        gene_prob += PROBS["gene"][1] * (0.5 * (1 - PROBS["mutation"]) + 0.5 * PROBS["mutation"])
+        gene_prob += PROBS["gene"][2] * (1 - PROBS["mutation"])
+
+        return gene_prob
+    
+    else:
+        gene_prob = PROBS["gene"][0] * (1 - PROBS["mutation"])
+        gene_prob += PROBS["gene"][1] * (0.5 * (1 - PROBS["mutation"]) + 0.5 * PROBS["mutation"])
+        gene_prob += PROBS["gene"][2] * (PROBS["mutation"])
+        
+        return gene_prob  
+        
 
 def update(probabilities, one_gene, two_genes, have_trait, p):
     """
@@ -149,15 +240,26 @@ def update(probabilities, one_gene, two_genes, have_trait, p):
     Which value for each distribution is updated depends on whether
     the person is in `have_gene` and `have_trait`, respectively.
     """
-    raise NotImplementedError
+    
+    for person in probabilities:
+        gene = 2 if person in two_genes else 1 if person in one_gene else 0
+        trait = True if person in have_trait else False
 
+        probabilities[person]["gene"][gene] += p
+        probabilities[person]["trait"][trait] += p
+    
 
 def normalize(probabilities):
     """
     Update `probabilities` such that each probability distribution
     is normalized (i.e., sums to 1, with relative proportions the same).
     """
-    raise NotImplementedError
+
+    for person, features in probabilities.items():        
+        for feature, distribution in features.items():
+            s = sum(distribution.values())
+            for key, value in distribution.items():
+                probabilities[person][feature][key] = value / s 
 
 
 if __name__ == "__main__":
